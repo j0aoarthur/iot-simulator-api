@@ -29,8 +29,13 @@ public class SimulationService {
     private final Counter readingsCounter;
     private final Counter alertsCounter;
 
+    // Alerta se a POTÊNCIA instantânea passar desse valor (em Watts)
+    // Ex: Se algo consumir mais que 7000W, é um curto ou anomalia.
     @Value("${app.simulation.anomaly-threshold}")
-    private double anomalyThreshold;
+    private double anomalyPowerThreshold; // Renomeie no application.yml ou use o valor antigo pensando em Watts
+
+    @Value("${app.simulation.rate-ms}")
+    private long rateMs; // Precisamos saber o intervalo para calcular o tempo
 
     public SimulationService(DeviceRepository deviceRepository,
                              EnergyConsumptionRepository consumptionRepository,
@@ -48,50 +53,62 @@ public class SimulationService {
         List<Device> devices = deviceRepository.findAll();
         if (devices.isEmpty()) return;
 
-        log.info("Simulando dados para {} dispositivos...", devices.size());
-
         for (Device device : devices) {
-            // 1. Calcular o valor instantâneo (Leitura atual)
-            double base = device.getBaseValue();
-            double fluctuation = 0.8 + (0.4 * random.nextDouble()); // Varia entre 0.8x e 1.2x
-            boolean isSpike = random.nextDouble() > 0.95; // 5% de chance de pico
+            // 1. Definição da Potência (Watts)
+            double ratedPowerWatts = device.getBaseValue(); // Agora interpretamos como Watts!
 
-            double instantValue = base * fluctuation;
-            if (isSpike) {
-                instantValue = instantValue * 3.0;
+            // Simulação de Estado (Ligado/Desligado)
+            // Nem tudo fica ligado 100% do tempo na potência máxima.
+            // Para simplificar, vamos variar a potência atual entre 10% (standby) e 110% (pico)
+            double usageFactor = 0.1 + (1.0 * random.nextDouble());
+
+            // Simulação de "Ciclo de Geladeira/Ar": Chance de estar no motor (alto) ou ventilador (baixo)
+            // Se for potência alta (>1000W), chance de estar "desarmado" (apenas 5% da potência)
+            if (ratedPowerWatts > 1000 && random.nextBoolean()) {
+                usageFactor = 0.05; // Compressor desligado, só leds/sensores
             }
 
-            // Arredondar para 2 casas
-            instantValue = Math.round(instantValue * 100.0) / 100.0;
+            double currentPowerWatts = ratedPowerWatts * usageFactor;
 
-            // 2. Salvar o Histórico de Leitura (EnergyConsumption)
+            // Spike (Curto-circuito ou partida de motor): 3x a potência nominal
+            boolean isSpike = random.nextDouble() > 0.98;
+            if (isSpike) {
+                currentPowerWatts = ratedPowerWatts * 3.0;
+            }
+
+            // 2. A FÓRMULA MÁGICA: Converter Watts em kWh baseado no tempo decorrido
+            // kWh = (Watts / 1000) * (Segundos / 3600)
+            double timeInHours = (double) rateMs / 3600000.0; // converte ms para horas
+            double energyConsumedKwh = (currentPowerWatts / 1000.0) * timeInHours;
+
+            // Arredondar para 6 casas decimais (valores são pequenos agora)
+            energyConsumedKwh = Math.round(energyConsumedKwh * 1000000.0) / 1000000.0;
+
+            // 3. Salvar Leitura (kWh acumulado neste intervalo)
             EnergyConsumption reading = EnergyConsumption.builder()
                     .deviceId(device.getDeviceId())
-                    .value(instantValue)
+                    .value(energyConsumedKwh)
                     .timestamp(LocalDateTime.now())
                     .build();
             consumptionRepository.save(reading);
             readingsCounter.increment();
 
-            // 3. ATUALIZAR O DISPOSITIVO (Somar ao Total)
-            double newTotal = device.getTotalConsumption() + instantValue;
-            // Arredondar o total também para não ficar com dizimas infinitas
-            newTotal = Math.round(newTotal * 100.0) / 100.0;
-
+            // 4. Atualizar Total do Dispositivo
+            double newTotal = device.getTotalConsumption() + energyConsumedKwh;
             device.setTotalConsumption(newTotal);
-            deviceRepository.save(device); // Salva o novo total no banco
+            deviceRepository.save(device);
 
-            // 4. Checar Alertas
-            if (isSpike || instantValue > anomalyThreshold) {
+            // 5. Alerta (Baseado na Potência em Watts, não no kWh minúsculo)
+            // Se a potência atual passar do limite (ex: 5000W) e for um spike
+            if (isSpike && currentPowerWatts > anomalyPowerThreshold) {
                 Alert alert = Alert.builder()
                         .deviceId(device.getDeviceId())
-                        .type("HIGH_USAGE_SPIKE")
-                        .message("Pico detectado: " + instantValue + " kWh (Consumo total do dispositivo: " + newTotal + " kWh)")
+                        .type("HIGH_POWER_SURGE")
+                        .message(String.format("Pico detectado: %.2f W (Potência nominal: %.0f W)", currentPowerWatts, ratedPowerWatts))
                         .timestamp(LocalDateTime.now())
                         .build();
                 alertRepository.save(alert);
                 alertsCounter.increment();
-                log.warn("🚨 Dispositivo {} Pico: {} kWh | Total Acumulado: {} kWh", device.getName(), instantValue, newTotal);
             }
         }
     }
