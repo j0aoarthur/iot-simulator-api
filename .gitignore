@@ -32,4 +32,25 @@ build/
 ### VS Code ###
 .vscode/
 /.env
-/terraform/terraform.tfvars
+
+# Arquivos de estado local (CRÍTICO: Contém segredos)
+*.tfstate
+*.tfstate.*
+
+# Diretório de plugins baixados
+.terraform/
+
+# Arquivos de variáveis (Contém segredos como chaves SSH)
+*.tfvars
+*.auto.tfvars
+
+# Logs de crash
+crash.log
+override.tf
+override.tf.json
+_override.tf
+_override.tf.json
+
+# Configurações de CLI locais
+.terraformrc
+terraform.rc
