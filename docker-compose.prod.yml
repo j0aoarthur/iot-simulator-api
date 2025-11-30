@@ -9,8 +9,8 @@ services:
       - "8080:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=prod
-      # Inject env vars if you configured them in Terraform/VM
-      - APP_SIMULATION_RATE_MS=5000
+      - APP_SIMULATION_RATE_MS=${APP_SIMULATION_RATE_MS}
+      - APP_SIMULATION_ANOMALY_THRESHOLD=${APP_SIMULATION_ANOMALY_THRESHOLD}
     networks:
       - monitoring
     restart: unless-stopped
@@ -33,7 +33,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PWD}
     networks:
       - monitoring
     depends_on:

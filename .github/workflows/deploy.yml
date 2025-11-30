@@ -5,10 +5,13 @@ on:
     branches: [ "main" ]
 
 env:
+  # Configurações Gerais do Projeto
   PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
   GAR_LOCATION: us-central1
   REPOSITORY: iot-simulator-repo
   IMAGE: iot-simulator
+
+  # Configurações da VM
   VM_IP: ${{ secrets.GCP_VM_IP }}
   VM_USER: deploy
 
@@ -17,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: 'read'
-      id-token: 'write' # Required for GCP Workload Identity Federation
+      id-token: 'write'
 
     steps:
       - name: Checkout code
@@ -33,7 +36,7 @@ jobs:
       - name: Build with Maven
         run: mvn clean package -DskipTests
 
-      # Authenticate to Google Cloud
+      # Autenticação no Google Cloud
       - name: Google Auth
         uses: google-github-actions/auth@v1
         with:
@@ -43,9 +46,9 @@ jobs:
         run: |-
           gcloud auth configure-docker ${{ env.GAR_LOCATION }}-docker.pkg.dev
 
+      # Build e Push da Imagem Docker
       - name: Build and Push Docker Image
         run: |-
-          # Create a tag based on the commit SHA
           TAG=${{ github.sha }}
           IMAGE_URI=${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}
           
@@ -70,25 +73,43 @@ jobs:
       - name: Scan SSH Keys
         run: ssh-keyscan -H ${{ env.VM_IP }} >> ~/.ssh/known_hosts
 
+      - name: Prepare VM Directories
+        run: |-
+          ssh ${{ env.VM_USER }}@${{ env.VM_IP }} "mkdir -p /home/${{ env.VM_USER }}/app"
+
+      # Copia os arquivos de configuração (docker-compose, prometheus, script)
       - name: Copy Config Files to VM
         run: |-
-          # Create app directory on VM
-          ssh ${{ env.VM_USER }}@${{ env.VM_IP }} "mkdir -p /home/${{ env.VM_USER }}/app"
-          
-          # Copy Docker Compose file
           scp docker-compose.prod.yml ${{ env.VM_USER }}@${{ env.VM_IP }}:/home/${{ env.VM_USER }}/app/docker-compose.prod.yml
-          
-          # Copy Prometheus Config
-          # Assuming your local file is at docker/prometheus/prometheus.yml
           scp docker/prometheus/prometheus.yml ${{ env.VM_USER }}@${{ env.VM_IP }}:/home/${{ env.VM_USER }}/app/prometheus.yml
-          
-          # Copy Deploy Script
           scp scripts/deploy.sh ${{ env.VM_USER }}@${{ env.VM_IP }}:/home/${{ env.VM_USER }}/app/deploy.sh
+
+      # 🔥 CRIAÇÃO DO .ENV (A Mágica acontece aqui)
+      # Mistura Secrets (Senhas), Vars (Config) e Infos do Build (Imagem)
+      - name: Generate .env file on VM
+        run: |-
+          IMAGE_URI=${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.IMAGE }}
+          TAG=${{ github.sha }}
+          
+          ssh ${{ env.VM_USER }}@${{ env.VM_IP }} "cat > /home/${{ env.VM_USER }}/app/.env <<EOF
+          # --- Imagem Docker (Gerada no Build) ---
+          BACKEND_IMAGE=$IMAGE_URI:$TAG
+          
+          # --- Segredos (Vindos do GitHub Secrets) ---
+          GRAFANA_PWD=${{ secrets.GRAFANA_PASSWORD }}
+          # DB_PASSWORD=${{ secrets.DB_PASSWORD }} (Se usar Postgres no futuro)
+          
+          # --- Configurações de Negócio (Vindas do GitHub Variables) ---
+          APP_SIMULATION_RATE_MS=${{ vars.APP_SIMULATION_RATE_MS || '5000' }}
+          APP_SIMULATION_ANOMALY_THRESHOLD=${{ vars.APP_SIMULATION_ANOMALY_THRESHOLD || '5000' }}
+          
+          # --- Configurações Fixas ---
+          SERVER_PORT=${{ vars.SERVER_PORT || '8080' }}
+          SPRING_PROFILES_ACTIVE=prod
+          EOF"
 
       - name: Execute Deployment
         run: |-
-          TAG=${{ github.sha }}
           REPO_URL=${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}
-          
-          # Run the script remotely inside the app directory
-          ssh ${{ env.VM_USER }}@${{ env.VM_IP }} "chmod +x ~/app/deploy.sh && cd ~/app && ./deploy.sh $TAG $REPO_URL"
+          # O script deploy.sh agora vai usar o .env que acabamos de criar
+          ssh ${{ env.VM_USER }}@${{ env.VM_IP }} "chmod +x ~/app/deploy.sh && cd ~/app && ./deploy.sh ${{ github.sha }} $REPO_URL"
