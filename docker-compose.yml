@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  iot-app:
+    build: .
+    container_name: iot_backend
+    ports:
+      - "${SERVER_PORT:-8080}:8080" # Maps Host Port : Container Port
+    environment:
+      - SPRING_PROFILES_ACTIVE=${SPRING_PROFILES_ACTIVE:-docker}
+      # Spring Boot automatically maps these env vars to application.yml properties
+      - APP_SIMULATION_RATE_MS=${SIMULATION_RATE_MS:-5000}
+      - APP_SIMULATION_ANOMALY_THRESHOLD=${ANOMALY_THRESHOLD:-5.0}
+    networks:
+      - monitoring
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "${PROMETHEUS_PORT:-9090}:9090"
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+
+networks:
+  monitoring:
+    driver: bridge

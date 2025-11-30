@@ -1,0 +1,46 @@
+server:
+  # Uses SERVER_PORT env var, defaults to 8080 if not set
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: iot-simulator
+
+  # Database Configuration (H2 In-Memory)
+  datasource:
+    url: jdbc:h2:mem:iotdb
+    driverClassName: org.h2.Driver
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+# Custom Simulation Configuration
+app:
+  simulation:
+    # Reads APP_SIMULATION_RATE_MS, defaults to 15000ms (15s)
+    rate-ms: ${APP_SIMULATION_RATE_MS:15000}
+    # Reads APP_SIMULATION_ANOMALY_THRESHOLD, defaults to 50.0 kWh
+    anomaly-threshold: ${APP_SIMULATION_ANOMALY_THRESHOLD:50.0}
+
+# Monitoring Configuration (Actuator + Prometheus)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, prometheus, metrics
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
