@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -26,6 +27,15 @@ public class IotController {
     private final SimulationService simulationService;
     private final EnergyConsumptionRepository consumptionRepository;
     private final AlertRepository alertRepository;
+
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, String>> healthCheck() {
+        return ResponseEntity.ok(Map.of(
+                "status", "UP",
+                "message", "Simulador de IoT está funcionando corretamente.",
+                "timestamp", java.time.LocalDateTime.now().toString()
+        ));
+    }
 
     @PostMapping("/devices")
     public ResponseEntity<Device> registerDevice(@RequestBody @Valid DeviceRequest request) {
