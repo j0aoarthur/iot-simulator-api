@@ -11,6 +11,9 @@ services:
       - SPRING_PROFILES_ACTIVE=prod
       - APP_SIMULATION_RATE_MS=${APP_SIMULATION_RATE_MS}
       - APP_SIMULATION_ANOMALY_THRESHOLD=${APP_SIMULATION_ANOMALY_THRESHOLD}
+      - TZ=America/Sao_Paulo
+    volumes:
+      - ./iot-data:/data
     networks:
       - monitoring
     restart: unless-stopped
