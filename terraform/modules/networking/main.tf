@@ -19,8 +19,7 @@ resource "google_compute_firewall" "allow_web" {
 
   allow {
     protocol = "tcp"
-    # Added 3000 (Grafana) and 9090 (Prometheus)
-    ports    = ["80", "443", "8080", "3000", "9090"]
+    ports    = ["80", "443", "8080", "3000"]
   }
   source_ranges = ["0.0.0.0/0"]
 }
@@ -33,7 +32,7 @@ resource "google_compute_firewall" "allow_ssh" {
     protocol = "tcp"
     ports    = ["22"]
   }
-  source_ranges = ["0.0.0.0/0"] # In prod, restrict to specific IPs
+  source_ranges = ["0.0.0.0/0"]
 }
 
 output "network_self_link" { value = google_compute_network.vpc.self_link }

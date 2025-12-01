@@ -8,7 +8,7 @@ variable "ssh_pub_key" {}
 
 resource "google_compute_instance" "vm" {
   name         = "${var.app_name}-vm"
-  machine_type = "e2-small" # Cost effective
+  machine_type = "e2-small"
   zone         = var.zone
   tags         = ["http-server", "https-server"]
 
@@ -23,7 +23,6 @@ resource "google_compute_instance" "vm" {
     network    = var.network_link
     subnetwork = var.subnet_link
     access_config {
-      # Ephemeral public IP
     }
   }
 
@@ -36,7 +35,6 @@ resource "google_compute_instance" "vm" {
     ssh-keys = "${var.ssh_user}:${var.ssh_pub_key}"
   }
 
-  # Startup script to install Docker
   metadata_startup_script = <<-EOF
     #!/bin/bash
     sudo apt-get update
