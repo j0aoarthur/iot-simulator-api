@@ -44,3 +44,11 @@ management:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+
+# Swagger / OpenAPIConfiguration
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method

@@ -80,8 +80,18 @@ jobs:
       # Copia os arquivos de configuração (docker-compose, prometheus, script)
       - name: Copy Config Files to VM
         run: |-
+          # Cria pasta na VM
+          ssh ${{ env.VM_USER }}@${{ env.VM_IP }} "mkdir -p /home/${{ env.VM_USER }}/app"
+          
+          # Copia Docker Compose
           scp docker-compose.prod.yml ${{ env.VM_USER }}@${{ env.VM_IP }}:/home/${{ env.VM_USER }}/app/docker-compose.prod.yml
+          
+          # Copia Configs de Monitoramento (Prometheus, Loki, Promtail)
           scp docker/prometheus/prometheus.yml ${{ env.VM_USER }}@${{ env.VM_IP }}:/home/${{ env.VM_USER }}/app/prometheus.yml
+          scp docker/loki/loki-config.yaml ${{ env.VM_USER }}@${{ env.VM_IP }}:/home/${{ env.VM_USER }}/app/loki-config.yaml
+          scp docker/loki/promtail-config.yaml ${{ env.VM_USER }}@${{ env.VM_IP }}:/home/${{ env.VM_USER }}/app/promtail-config.yaml
+          
+          # Copia Script
           scp scripts/deploy.sh ${{ env.VM_USER }}@${{ env.VM_IP }}:/home/${{ env.VM_USER }}/app/deploy.sh
 
       # 🔥 CRIAÇÃO DO .ENV (A Mágica acontece aqui)
